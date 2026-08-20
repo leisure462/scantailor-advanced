@@ -53,7 +53,14 @@ SettingsDialog::SettingsDialog(QWidget* parent) : QDialog(parent) {
   {
     auto* app = static_cast<Application*>(qApp);
     for (const QString& locale : app->getLanguagesList()) {
-      QString languageName = QLocale::languageToString(QLocale(locale).language());
+      QString languageName;
+      if (locale == "zh_CN" || locale == "zh") {
+        languageName = QString::fromUtf8("简体中文 (Simplified Chinese)");
+      } else if (locale == "en") {
+        languageName = "English";
+      } else {
+        languageName = QLocale::languageToString(QLocale(locale).language());
+      }
       ui.languageBox->addItem(languageName, locale);
     }
     ui.languageBox->setCurrentIndex(ui.languageBox->findData(app->getCurrentLocale()));

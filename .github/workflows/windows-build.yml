@@ -1,0 +1,85 @@
+name: Windows Build & Package
+
+on:
+  push:
+    branches: [ "master", "main" ]
+  pull_request:
+    branches: [ "master", "main" ]
+  workflow_dispatch:
+
+jobs:
+  build-windows:
+    name: Build Windows x64 Package
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup MSYS2
+        uses: msys2/setup-msys2@v2
+        with:
+          msystem: UCRT64
+          update: true
+          install: >-
+            base-devel
+            mingw-w64-ucrt-x86_64-toolchain
+            mingw-w64-ucrt-x86_64-cmake
+            mingw-w64-ucrt-x86_64-ninja
+            mingw-w64-ucrt-x86_64-qt5-base
+            mingw-w64-ucrt-x86_64-qt5-svg
+            mingw-w64-ucrt-x86_64-qt5-tools
+            mingw-w64-ucrt-x86_64-boost
+            mingw-w64-ucrt-x86_64-libjpeg-turbo
+            mingw-w64-ucrt-x86_64-libpng
+            mingw-w64-ucrt-x86_64-libtiff
+            mingw-w64-ucrt-x86_64-zlib
+            zip
+
+      - name: Configure CMake
+        shell: msys2 {0}
+        run: |
+          cmake -B build -G Ninja             -DCMAKE_BUILD_TYPE=Release             -DBUILD_TESTS=OFF             -DPORTABLE_VERSION=ON
+
+      - name: Build
+        shell: msys2 {0}
+        run: |
+          cmake --build build --config Release
+
+      - name: Package Standalone Windows Application
+        shell: msys2 {0}
+        run: |
+          mkdir -p package/scantailor-advanced-windows-x64
+          PKG_DIR="package/scantailor-advanced-windows-x64"
+
+          # Copy main executable
+          cp build/scantailor.exe "$PKG_DIR/"
+
+          # Run windeployqt to deploy Qt libraries and plugins
+          windeployqt --release --no-compiler-runtime "$PKG_DIR/scantailor.exe"
+
+          # Copy compiled translations (.qm files)
+          mkdir -p "$PKG_DIR/translations"
+          cp build/translations/*.qm "$PKG_DIR/translations/" 2>/dev/null || cp src/translations/*.qm "$PKG_DIR/translations/" 2>/dev/null || true
+
+          # Copy necessary MSYS2/UCRT64 shared libraries and runtime DLLs
+          cd /ucrt64/bin
+          for dll in libgcc_s_*.dll libstdc++-*.dll libwinpthread-*.dll zlib1.dll libpng16-*.dll libjpeg-*.dll libtiff-*.dll libdeflate*.dll libzstd*.dll liblzma-*.dll libboost_unit_test_framework*.dll; do
+            if [ -f "$dll" ]; then
+              cp -u "$dll" "$GITHUB_WORKSPACE/$PKG_DIR/"
+            fi
+          done
+
+          cd "$GITHUB_WORKSPACE"
+
+          # Compress to zip package
+          cd package
+          zip -r "../scantailor-advanced-windows-x64.zip" scantailor-advanced-windows-x64/
+          cd ..
+
+      - name: Upload Windows Package Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: scantailor-advanced-windows-x64
+          path: scantailor-advanced-windows-x64.zip
+          retention-days: 30

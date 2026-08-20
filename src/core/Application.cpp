@@ -28,17 +28,33 @@ bool Application::notify(QObject* receiver, QEvent* e) {
 }
 
 void Application::installLanguage(const QString& locale) {
-  if (m_currentLocale == locale) {
+  if (m_currentLocale == locale && !m_currentLocale.isEmpty()) {
     return;
   }
 
-  if (m_translationsMap.find(locale) != m_translationsMap.end()) {
-    bool loaded = m_translator.load(m_translationsMap[locale]);
+  QString targetLocale = locale;
+  if (m_translationsMap.find(targetLocale) == m_translationsMap.end()) {
+    if (targetLocale.startsWith("zh", Qt::CaseInsensitive)) {
+      if (m_translationsMap.find("zh_CN") != m_translationsMap.end()) {
+        targetLocale = "zh_CN";
+      } else if (m_translationsMap.find("zh") != m_translationsMap.end()) {
+        targetLocale = "zh";
+      }
+    } else if (targetLocale.contains('_')) {
+      QString base = targetLocale.section('_', 0, 0);
+      if (m_translationsMap.find(base) != m_translationsMap.end()) {
+        targetLocale = base;
+      }
+    }
+  }
+
+  if (m_translationsMap.find(targetLocale) != m_translationsMap.end()) {
+    bool loaded = m_translator.load(m_translationsMap[targetLocale]);
 
     QCoreApplication::removeTranslator(&m_translator);
     QCoreApplication::installTranslator(&m_translator);
 
-    m_currentLocale = (loaded) ? locale : "en";
+    m_currentLocale = (loaded) ? targetLocale : "en";
   } else {
     QCoreApplication::removeTranslator(&m_translator);
 

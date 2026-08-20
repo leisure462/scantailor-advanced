@@ -91,10 +91,68 @@ jobs:
           name: appimage
           path: scantailor-advanced-*-x86_64.AppImage
 
+  build-windows:
+    name: Build Windows x64
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup MSYS2
+        uses: msys2/setup-msys2@v2
+        with:
+          msystem: UCRT64
+          update: true
+          install: >-
+            base-devel
+            mingw-w64-ucrt-x86_64-toolchain
+            mingw-w64-ucrt-x86_64-cmake
+            mingw-w64-ucrt-x86_64-ninja
+            mingw-w64-ucrt-x86_64-qt5-base
+            mingw-w64-ucrt-x86_64-qt5-svg
+            mingw-w64-ucrt-x86_64-qt5-tools
+            mingw-w64-ucrt-x86_64-boost
+            mingw-w64-ucrt-x86_64-libjpeg-turbo
+            mingw-w64-ucrt-x86_64-libpng
+            mingw-w64-ucrt-x86_64-libtiff
+            mingw-w64-ucrt-x86_64-zlib
+            zip
+
+      - name: Configure and build
+        shell: msys2 {0}
+        run: |
+          cmake -B build -G Ninja -DCMAKE_BUILD_TYPE=Release -DBUILD_TESTS=OFF -DPORTABLE_VERSION=ON
+          cmake --build build --config Release
+
+      - name: Package Standalone Windows Application
+        shell: msys2 {0}
+        run: |
+          mkdir -p package/scantailor-advanced-windows-x64
+          PKG_DIR="package/scantailor-advanced-windows-x64"
+          cp build/scantailor.exe "$PKG_DIR/"
+          windeployqt --release --no-compiler-runtime "$PKG_DIR/scantailor.exe"
+          mkdir -p "$PKG_DIR/translations"
+          cp build/translations/*.qm "$PKG_DIR/translations/" 2>/dev/null || cp src/translations/*.qm "$PKG_DIR/translations/" 2>/dev/null || true
+          cd /ucrt64/bin
+          for dll in libgcc_s_*.dll libstdc++-*.dll libwinpthread-*.dll zlib1.dll libpng16-*.dll libjpeg-*.dll libtiff-*.dll libdeflate*.dll libzstd*.dll liblzma-*.dll libboost_unit_test_framework*.dll; do
+            if [ -f "$dll" ]; then
+              cp -u "$dll" "$GITHUB_WORKSPACE/$PKG_DIR/"
+            fi
+          done
+          cd "$GITHUB_WORKSPACE"
+          cd package
+          zip -r "../scantailor-advanced-${{ github.ref_name }}-windows-x64.zip" scantailor-advanced-windows-x64/
+          cd ..
+
+      - name: Upload Windows zip artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-package
+          path: scantailor-advanced-*-windows-x64.zip
+
   release:
     name: Create GitHub Release
     runs-on: ubuntu-latest
-    needs: [build-deb, build-appimage]
+    needs: [build-deb, build-appimage, build-windows]
     steps:
       - uses: actions/download-artifact@v4
         with:
@@ -102,6 +160,9 @@ jobs:
       - uses: actions/download-artifact@v4
         with:
           name: appimage
+      - uses: actions/download-artifact@v4
+        with:
+          name: windows-package
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
@@ -109,6 +170,7 @@ jobs:
           files: |
             scantailor-advanced_*_amd64.deb
             scantailor-advanced-*-x86_64.AppImage
+            scantailor-advanced-*-windows-x64.zip
           generate_release_notes: true
           draft: false
         env:
