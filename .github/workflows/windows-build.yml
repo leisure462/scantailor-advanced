@@ -35,6 +35,7 @@ jobs:
             mingw-w64-ucrt-x86_64-libtiff
             mingw-w64-ucrt-x86_64-zlib
             zip
+            python
 
       - name: Configure CMake
         shell: msys2 {0}
@@ -56,42 +57,15 @@ jobs:
           # Copy main executable
           cp build/scantailor.exe "$PKG_DIR/"
 
-          # Run windeployqt to deploy Qt libraries and plugins
-          windeployqt --release --no-compiler-runtime "$PKG_DIR/scantailor.exe" || true
-
           # Copy compiled translations (.qm files)
           cp build/translations/*.qm "$PKG_DIR/translations/" 2>/dev/null || cp src/translations/*.qm "$PKG_DIR/translations/" 2>/dev/null || true
 
-          # Copy necessary MSYS2/UCRT64 shared libraries and runtime DLLs
-          cp /ucrt64/bin/libgcc_s_*.dll "$PKG_DIR/" 2>/dev/null || true
-          cp /ucrt64/bin/libstdc++-*.dll "$PKG_DIR/" 2>/dev/null || true
-          cp /ucrt64/bin/libwinpthread-*.dll "$PKG_DIR/" 2>/dev/null || true
-          cp /ucrt64/bin/zlib1.dll "$PKG_DIR/" 2>/dev/null || true
-          cp /ucrt64/bin/libpng16-*.dll "$PKG_DIR/" 2>/dev/null || true
-          cp /ucrt64/bin/libjpeg-*.dll "$PKG_DIR/" 2>/dev/null || true
-          cp /ucrt64/bin/libtiff-*.dll "$PKG_DIR/" 2>/dev/null || true
-          cp /ucrt64/bin/libdeflate*.dll "$PKG_DIR/" 2>/dev/null || true
-          cp /ucrt64/bin/libzstd*.dll "$PKG_DIR/" 2>/dev/null || true
-          cp /ucrt64/bin/liblzma-*.dll "$PKG_DIR/" 2>/dev/null || true
-          cp /ucrt64/bin/libboost_unit_test_framework*.dll "$PKG_DIR/" 2>/dev/null || true
+          # Run automated recursive PE dependency deployer
+          python deploy_windows.py "$PKG_DIR" /ucrt64/bin
 
-          # Ensure Qt plugins are deployed properly
-          if [ ! -d "$PKG_DIR/platforms" ]; then
-            mkdir -p "$PKG_DIR/platforms"
-            cp /ucrt64/share/qt5/plugins/platforms/qwindows.dll "$PKG_DIR/platforms/" 2>/dev/null || cp /ucrt64/plugins/platforms/qwindows.dll "$PKG_DIR/platforms/" 2>/dev/null || true
-          fi
-          if [ ! -d "$PKG_DIR/styles" ]; then
-            mkdir -p "$PKG_DIR/styles"
-            cp /ucrt64/share/qt5/plugins/styles/*.dll "$PKG_DIR/styles/" 2>/dev/null || cp /ucrt64/plugins/styles/*.dll "$PKG_DIR/styles/" 2>/dev/null || true
-          fi
-          if [ ! -d "$PKG_DIR/imageformats" ]; then
-            mkdir -p "$PKG_DIR/imageformats"
-            cp /ucrt64/share/qt5/plugins/imageformats/*.dll "$PKG_DIR/imageformats/" 2>/dev/null || cp /ucrt64/plugins/imageformats/*.dll "$PKG_DIR/imageformats/" 2>/dev/null || true
-          fi
-          if [ ! -d "$PKG_DIR/iconengines" ]; then
-            mkdir -p "$PKG_DIR/iconengines"
-            cp /ucrt64/share/qt5/plugins/iconengines/*.dll "$PKG_DIR/iconengines/" 2>/dev/null || cp /ucrt64/plugins/iconengines/*.dll "$PKG_DIR/iconengines/" 2>/dev/null || true
-          fi
+          # List deployed package contents
+          echo "Deployed files in package:"
+          ls -la "$PKG_DIR"
 
           # Create zip archive
           cd "$ROOT_DIR/package"
