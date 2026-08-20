@@ -10,6 +10,8 @@
 #include <core/IconProvider.h>
 #include <core/StyledIconPack.h>
 
+#include <QCoreApplication>
+#include <QFileInfo>
 #include <QGuiApplication>
 #include <QSettings>
 #include <QStringList>
@@ -25,11 +27,20 @@ int main(int argc, char* argv[]) {
   QGuiApplication::setHighDpiScaleFactorRoundingPolicy(Qt::HighDpiScaleFactorRoundingPolicy::PassThrough);
 #endif
 #endif
+#ifdef _WIN32
+  // Set plugin and library search paths BEFORE QApplication initializes the platform plugin
+  QString appDir = QFileInfo(QString::fromLocal8Bit(argv[0])).absolutePath();
+  if (appDir.isEmpty()) {
+    appDir = ".";
+  }
+  QCoreApplication::setLibraryPaths(QStringList() << appDir << appDir + "/platforms" << appDir + "/plugins");
+#endif
+
   Application app(argc, argv);
 
 #ifdef _WIN32
-  // Get rid of all references to Qt's installation directory.
-  Application::setLibraryPaths(QStringList(Application::applicationDirPath()));
+  // Also ensure runtime paths are clean after construction
+  Application::setLibraryPaths(QStringList() << Application::applicationDirPath() << Application::applicationDirPath() + "/platforms" << Application::applicationDirPath() + "/plugins");
 #endif
 
   QStringList args = Application::arguments();

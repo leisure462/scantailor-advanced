@@ -78,34 +78,40 @@ def get_imported_dlls(filepath):
 def deploy(package_dir, ucrt_bin_dir):
     print(f"Deploying dependencies to {package_dir} from {ucrt_bin_dir}...")
     
-    # 1. First deploy Qt plugins and directories
-    qt_plugin_dirs = {
-        'platforms': ['qwindows.dll'],
-        'styles': None,
-        'imageformats': None,
-        'iconengines': None
-    }
+    # Create qt.conf in package directory
+    qt_conf_path = os.path.join(package_dir, 'qt.conf')
+    with open(qt_conf_path, 'w', encoding='utf-8') as f:
+        f.write("[Paths]\nPrefix = .\nPlugins = .\nTranslations = translations\n")
+    print("Created qt.conf")
+
+    # 1. Locate Qt plugins
+    plugin_folders = ['platforms', 'styles', 'imageformats', 'iconengines', 'printsupport']
+    qt_plugins_sources = [
+        '/ucrt64/share/qt5/plugins',
+        '/ucrt64/lib/qt5/plugins',
+        '/ucrt64/plugins',
+        'C:/msys64/ucrt64/share/qt5/plugins',
+        'C:/msys64/ucrt64/lib/qt5/plugins',
+        'C:/msys64/ucrt64/plugins'
+    ]
     
-    # Check possible Qt plugins source paths
-    qt_plugins_source = None
-    for cand in ['/ucrt64/share/qt5/plugins', '/ucrt64/plugins', 'C:/msys64/ucrt64/share/qt5/plugins', 'C:/msys64/ucrt64/plugins']:
-        if os.path.isdir(cand):
-            qt_plugins_source = cand
-            break
-            
-    if qt_plugins_source:
-        print(f"Using Qt plugins source: {qt_plugins_source}")
-        for folder, files in qt_plugin_dirs.items():
-            src_folder = os.path.join(qt_plugins_source, folder)
-            dst_folder = os.path.join(package_dir, folder)
-            os.makedirs(dst_folder, exist_ok=True)
-            if os.path.isdir(src_folder):
-                for f in os.listdir(src_folder):
-                    if f.endswith('.dll') and (files is None or f in files):
-                        src_file = os.path.join(src_folder, f)
-                        dst_file = os.path.join(dst_folder, f)
-                        shutil.copy2(src_file, dst_file)
-                        print(f"Copied plugin: {folder}/{f}")
+    for src_base in qt_plugins_sources:
+        if os.path.isdir(src_base):
+            print(f"Found Qt plugins directory: {src_base}")
+            for folder in plugin_folders:
+                src_folder = os.path.join(src_base, folder)
+                if os.path.isdir(src_folder):
+                    # Copy to package_dir/<folder> and package_dir/plugins/<folder>
+                    dst_folder1 = os.path.join(package_dir, folder)
+                    dst_folder2 = os.path.join(package_dir, 'plugins', folder)
+                    os.makedirs(dst_folder1, exist_ok=True)
+                    os.makedirs(dst_folder2, exist_ok=True)
+                    for f in os.listdir(src_folder):
+                        if f.lower().endswith('.dll'):
+                            src_file = os.path.join(src_folder, f)
+                            shutil.copy2(src_file, os.path.join(dst_folder1, f))
+                            shutil.copy2(src_file, os.path.join(dst_folder2, f))
+                            print(f"Copied plugin: {folder}/{f}")
 
     # Build lookup of all DLLs available in ucrt_bin_dir
     available_dlls = {}
@@ -115,18 +121,18 @@ def deploy(package_dir, ucrt_bin_dir):
                 available_dlls[f.lower()] = os.path.join(ucrt_bin_dir, f)
     print(f"Found {len(available_dlls)} DLLs in {ucrt_bin_dir}")
 
-    # Explicitly copy Qt5 core DLLs to be 100% sure
+    # Explicitly copy Qt5 and core dependencies
+    prefixes = ['qt5', 'libboost', 'libjpeg', 'libpng', 'libtiff', 'zlib', 'libgcc', 'libstdc++', 'libwinpthread', 'libfreetype', 'libharfbuzz', 'libpcre', 'libglib', 'libintl', 'libiconv', 'libdouble-conversion', 'libbrotli', 'libgraphite', 'libzstd', 'libdeflate', 'liblzma']
     for dll_name, src_path in available_dlls.items():
-        if dll_name.startswith('qt5') or dll_name.startswith('libboost') or dll_name.startswith('libjpeg') or dll_name.startswith('libpng') or dll_name.startswith('libtiff') or dll_name.startswith('zlib'):
+        if any(dll_name.startswith(p) for p in prefixes):
             dst = os.path.join(package_dir, os.path.basename(src_path))
             if not os.path.exists(dst):
                 shutil.copy2(src_path, dst)
-                print(f"Copied base DLL: {os.path.basename(src_path)}")
+                print(f"Copied runtime DLL: {os.path.basename(src_path)}")
 
-    # 2. Iteratively discover all dependencies
+    # 2. Iteratively discover all dependencies across all binaries and plugins
     processed = set()
     while True:
-        # Scan all .exe and .dll in package_dir and its subdirectories
         all_binaries = []
         for root, _, files in os.walk(package_dir):
             for f in files:
