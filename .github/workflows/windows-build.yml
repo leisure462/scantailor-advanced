@@ -49,33 +49,54 @@ jobs:
       - name: Package Standalone Windows Application
         shell: msys2 {0}
         run: |
-          mkdir -p package/scantailor-advanced-windows-x64
-          PKG_DIR="package/scantailor-advanced-windows-x64"
+          ROOT_DIR="$(pwd)"
+          PKG_DIR="$ROOT_DIR/package/scantailor-advanced-windows-x64"
+          mkdir -p "$PKG_DIR/translations"
 
           # Copy main executable
           cp build/scantailor.exe "$PKG_DIR/"
 
           # Run windeployqt to deploy Qt libraries and plugins
-          windeployqt --release --no-compiler-runtime "$PKG_DIR/scantailor.exe"
+          windeployqt --release --no-compiler-runtime "$PKG_DIR/scantailor.exe" || true
 
           # Copy compiled translations (.qm files)
-          mkdir -p "$PKG_DIR/translations"
           cp build/translations/*.qm "$PKG_DIR/translations/" 2>/dev/null || cp src/translations/*.qm "$PKG_DIR/translations/" 2>/dev/null || true
 
           # Copy necessary MSYS2/UCRT64 shared libraries and runtime DLLs
-          cd /ucrt64/bin
-          for dll in libgcc_s_*.dll libstdc++-*.dll libwinpthread-*.dll zlib1.dll libpng16-*.dll libjpeg-*.dll libtiff-*.dll libdeflate*.dll libzstd*.dll liblzma-*.dll libboost_unit_test_framework*.dll; do
-            if [ -f "$dll" ]; then
-              cp -u "$dll" "$GITHUB_WORKSPACE/$PKG_DIR/"
-            fi
-          done
+          cp /ucrt64/bin/libgcc_s_*.dll "$PKG_DIR/" 2>/dev/null || true
+          cp /ucrt64/bin/libstdc++-*.dll "$PKG_DIR/" 2>/dev/null || true
+          cp /ucrt64/bin/libwinpthread-*.dll "$PKG_DIR/" 2>/dev/null || true
+          cp /ucrt64/bin/zlib1.dll "$PKG_DIR/" 2>/dev/null || true
+          cp /ucrt64/bin/libpng16-*.dll "$PKG_DIR/" 2>/dev/null || true
+          cp /ucrt64/bin/libjpeg-*.dll "$PKG_DIR/" 2>/dev/null || true
+          cp /ucrt64/bin/libtiff-*.dll "$PKG_DIR/" 2>/dev/null || true
+          cp /ucrt64/bin/libdeflate*.dll "$PKG_DIR/" 2>/dev/null || true
+          cp /ucrt64/bin/libzstd*.dll "$PKG_DIR/" 2>/dev/null || true
+          cp /ucrt64/bin/liblzma-*.dll "$PKG_DIR/" 2>/dev/null || true
+          cp /ucrt64/bin/libboost_unit_test_framework*.dll "$PKG_DIR/" 2>/dev/null || true
 
-          cd "$GITHUB_WORKSPACE"
+          # Ensure Qt plugins are deployed properly
+          if [ ! -d "$PKG_DIR/platforms" ]; then
+            mkdir -p "$PKG_DIR/platforms"
+            cp /ucrt64/share/qt5/plugins/platforms/qwindows.dll "$PKG_DIR/platforms/" 2>/dev/null || cp /ucrt64/plugins/platforms/qwindows.dll "$PKG_DIR/platforms/" 2>/dev/null || true
+          fi
+          if [ ! -d "$PKG_DIR/styles" ]; then
+            mkdir -p "$PKG_DIR/styles"
+            cp /ucrt64/share/qt5/plugins/styles/*.dll "$PKG_DIR/styles/" 2>/dev/null || cp /ucrt64/plugins/styles/*.dll "$PKG_DIR/styles/" 2>/dev/null || true
+          fi
+          if [ ! -d "$PKG_DIR/imageformats" ]; then
+            mkdir -p "$PKG_DIR/imageformats"
+            cp /ucrt64/share/qt5/plugins/imageformats/*.dll "$PKG_DIR/imageformats/" 2>/dev/null || cp /ucrt64/plugins/imageformats/*.dll "$PKG_DIR/imageformats/" 2>/dev/null || true
+          fi
+          if [ ! -d "$PKG_DIR/iconengines" ]; then
+            mkdir -p "$PKG_DIR/iconengines"
+            cp /ucrt64/share/qt5/plugins/iconengines/*.dll "$PKG_DIR/iconengines/" 2>/dev/null || cp /ucrt64/plugins/iconengines/*.dll "$PKG_DIR/iconengines/" 2>/dev/null || true
+          fi
 
-          # Compress to zip package
-          cd package
-          zip -r "../scantailor-advanced-windows-x64.zip" scantailor-advanced-windows-x64/
-          cd ..
+          # Create zip archive
+          cd "$ROOT_DIR/package"
+          zip -r "../scantailor-advanced-windows-x64.zip" scantailor-advanced-windows-x64
+          cd "$ROOT_DIR"
 
       - name: Upload Windows Package Artifact
         uses: actions/upload-artifact@v4
