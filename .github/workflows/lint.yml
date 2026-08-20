@@ -27,10 +27,10 @@ jobs:
           else
             BASE="${{ github.event.before }}"
           fi
-          if [ "$BASE" = "0000000000000000000000000000000000000000" ]; then
+          if [ -z "$BASE" ] || [ "$BASE" = "0000000000000000000000000000000000000000" ] || ! git cat-file -e "${BASE}^{commit}" 2>/dev/null; then
             BASE=$(git rev-parse HEAD~1 2>/dev/null || git rev-parse HEAD)
           fi
-          SRC_FILES=$(git diff --name-only "$BASE" HEAD -- src/ \
+          SRC_FILES=$(git diff --name-only "$BASE" HEAD -- src/ 2>/dev/null \
             | grep -E '\.(cpp|h)$' \
             | grep -v '/translations/' \
             || true)
